@@ -1,0 +1,22 @@
+{
+  "name": "couchsurfing",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "git@github.com:jasontibbetts/couchsurfing.git",
+  "author": "jason tibbetts <jasontibbetts@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "body-parser": "^1.20.2",
+    "express": "^4.18.2",
+    "mongodb": "^6.3.0",
+    "typescript": "^5.3.3"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/mongodb": "^4.0.7"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js"
+  }
+}

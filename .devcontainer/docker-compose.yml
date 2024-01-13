@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ../../:/workspaces:cached
+    depends_on:
+      - db
+    environment:
+      HTTPS_CERT: /run/secrets/https_cert
+      HTTPS_KEY: /run/secrets/https_key
+      HTTPS_PORT: 443
+      MONGO_PORT: 27017
+      MONGO_HOST: "localhost"
+      MONGO_DATABASE: "couchsurfing"
+      MONGO_USERNAME: "couch"
+      MONGO_PASSWORD: "couchpass"
+    secrets:
+      - https_cert
+      - https_key
+    # Overrides default command so things don't shut down after the process ends.
+    command: sleep infinity
+
+    # Runs app on the same network as the database container, allows "forwardPorts" in devcontainer.json function.
+    network_mode: service:db
+    # Use "forwardPorts" in **devcontainer.json** to forward an app port locally. 
+    # (Adding the "ports" property to this file will not forward from a Codespace.)
+
+  db:
+    image: mongo:latest
+    restart: unless-stopped
+    command: [ "--bind_ip", "localhost" ]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    environment:
+      MONGO_INITDB_DATABASE: "couchsurfing"
+      MONGO_INITDB_ROOT_USERNAME: "couch"
+      MONGO_INITDB_ROOT_PASSWORD: "couchpass"
+
+secrets:
+  https_cert:
+    file: ./env/https.cert
+  https_key:
+    file: ./env/https.key
+volumes:
+  mongodb-data:
