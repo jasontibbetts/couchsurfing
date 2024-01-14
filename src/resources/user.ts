@@ -131,7 +131,7 @@ export default class UserResource {
                 const toUser = await this.collection.findOne({ _id: req.params.to });
                 if (!fromUser || !toUser) {
                     res.status(400);
-                    res.send(JSON.stringify({ error: 'Missing required params' }));
+                    res.send(JSON.stringify({ error: 'Unable to find user' }));
                 } else {
                     const result = await search(fromUser, toUser, () => 0, () => 1, async (user: UserDocument) => {
                         const result = this.collection.find({ _id: { $in: user.friends } });
