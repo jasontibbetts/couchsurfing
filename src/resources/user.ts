@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Router, Request, Response } from 'express';
 import { Collection, MongoClient } from 'mongodb';
+import search from './graph';
 
 export interface UserDocument {
     _id: string;
@@ -39,11 +40,11 @@ export default class UserResource {
             res.status(200);
             res.setHeader('content-type', 'application/json');
             res.send(JSON.stringify(await cursor.toArray()));
-        } catch(e) {
+        } catch (e) {
             res.status(500);
-            res.send(JSON.stringify({ error: e instanceof Error ? e.message : String(e)}));
+            res.send(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }));
         }
-        
+
     }
 
     private async handleCreateUser(req: Request, res: Response): Promise<void> {
@@ -54,7 +55,7 @@ export default class UserResource {
                 ...userData,
                 _id
             });
-            if (result.insertedId) {            
+            if (result.insertedId) {
                 const user = await this.collection.findOne({ _id });
                 if (user) {
                     res.status(200);
@@ -66,7 +67,7 @@ export default class UserResource {
             }
         } catch (e) {
             res.status(500);
-            res.send(JSON.stringify({ error: e instanceof Error ? e.message : String(e)}));
+            res.send(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }));
         }
     }
 
@@ -75,7 +76,7 @@ export default class UserResource {
             const _id = req.params.id;
             const user = await this.collection.findOne({ _id });
             res.setHeader('content-type', 'application/json');
-            if (user)  {
+            if (user) {
                 res.status(200);
                 res.send(JSON.stringify(user));
             } else {
@@ -84,7 +85,7 @@ export default class UserResource {
             }
         } catch (e) {
             res.status(500);
-            res.send(JSON.stringify({ error: e instanceof Error ? e.message : String(e)}));
+            res.send(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }));
         }
     }
 
@@ -96,13 +97,13 @@ export default class UserResource {
             const result = await this.collection.updateOne({ _id }, updated, { upsert: false });
             if (result.modifiedCount) {
                 res.status(200);
-                res.send(JSON.stringify(updated));    
+                res.send(JSON.stringify(updated));
             }
         } catch (e) {
             res.status(500);
-            res.send(JSON.stringify({ error: e instanceof Error ? e.message : String(e)}));
+            res.send(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }));
         }
-        
+
     }
 
     private async handleDeleteUser(req: Request, res: Response): Promise<void> {
@@ -114,53 +115,37 @@ export default class UserResource {
             res.send();
         } catch (e) {
             res.status(500);
-            res.send(JSON.stringify({ error: e instanceof Error ? e.message : String(e)}));
+            res.send(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }));
         }
     }
 
-    private async handleRelationshipDistance(req: Request, res: Response): Promise<void>  {
+    private async handleRelationshipDistance(req: Request, res: Response): Promise<void> {
         try {
-            res.status(200);
             res.setHeader('content-type', 'application/json');
-            const fromUser = await this.collection.findOne({ _id: req.params.from });
-            const toUser = await this.collection.findOne({ _id: req.params.to });
-            if (!fromUser || !toUser) {
+            if (req.params.from === req.params.to) {
                 res.status(400);
-                res.send(JSON.stringify({ error: 'Missing required params' }));
+                res.send(JSON.stringify({ error: 'From and to user must be different' }));
             } else {
-                const distance = await this.getDistance(fromUser, toUser);
                 res.status(200);
-                res.send(JSON.stringify({ from: fromUser._id, to: toUser._id, distance }));
+                const fromUser = await this.collection.findOne({ _id: req.params.from });
+                const toUser = await this.collection.findOne({ _id: req.params.to });
+                if (!fromUser || !toUser) {
+                    res.status(400);
+                    res.send(JSON.stringify({ error: 'Missing required params' }));
+                } else {
+                    const result = await search(fromUser, toUser, () => 0, () => 1, async (user: UserDocument) => {
+                        const result = this.collection.find({ _id: { $in: user.friends } });
+                        return await result.toArray();
+                    }, ({ _id }: UserDocument) => _id);
+                    res.status(200);
+                    const distance = result ? result.length - 1 : null;
+                    res.send(JSON.stringify({ from: fromUser._id, to: toUser._id, distance }));
+                }
             }
         } catch (e) {
             res.status(500);
-            res.send(JSON.stringify({ error: e instanceof Error ? e.message : String(e)}));
+            res.send(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }));
         }
-    }
-
-    async getDistance(a: UserDocument, b: UserDocument, path: UserDocument[] = [], count = 0): Promise<UserDocument[]> {
-        if (count > 10) {
-            throw new Error('womp womp');
-        }
-        console.log(`getDistance(${a._id}, ${b._id}, ${path.length})`, a.friends);
-        if (a.friends.includes(b._id)) {
-            // direct friendship between a and b
-            console.log(`User: ${a._id} is directly connected to ${b._id} as a friend`);
-            return [...path, b];
-        }
-        // Check the distance for each friend
-        for (const _id of a.friends) {
-            const user = await this.collection.findOne({ _id });
-            if (user) {
-                const newPath = await this.getDistance(user, b, path);
-                if (newPath) {
-                    console.log(`User: ${a._id} has ${b._id} as a friend of a friend`);
-                    return [...path, ...newPath];
-                }
-            }
-        }
-        console.log(`User: ${a._id} has no connection to ${b._id}`);
-        return path;
     }
 
     static async factory({ mongoHost, mongoPort, mongoDatabase, mongoCollection, mongoPass, mongoUser }: UserResourceConfig): Promise<UserResource> {
